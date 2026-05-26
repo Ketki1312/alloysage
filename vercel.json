@@ -17,6 +17,6 @@
     { "src": "/api/predict", "dest": "/api/predict.py" },
     { "src": "/api/predict-all-sets", "dest": "/api/predict_all_sets.py" },
     { "src": "/api/load", "dest": "/api/load_data.py" },
-    { "src": "/(.*)", "dest": "/frontend/dist/$1" }
+    { "src": "/(.*)", "dest": "/frontend/dist/index.html" }
   ]
 }
