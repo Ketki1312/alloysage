@@ -1,7 +1,7 @@
-import Alloysage from "./alloysage";
+import AlloySage from "./AlloySage";
 
 function App() {
-  return <Alloysage />;
+  return <AlloySage />;
 }
 
 export default App;
