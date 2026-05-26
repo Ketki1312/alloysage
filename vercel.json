@@ -2,13 +2,31 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/*.py",
+      "src": "api/health.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/model_info.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/predict.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/predict_all_sets.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/load_data.py",
       "use": "@vercel/python"
     },
     {
       "src": "frontend/package.json",
       "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
+      "config": {
+        "distDir": "dist"
+      }
     }
   ],
   "routes": [
@@ -17,6 +35,6 @@
     { "src": "/api/predict", "dest": "/api/predict.py" },
     { "src": "/api/predict-all-sets", "dest": "/api/predict_all_sets.py" },
     { "src": "/api/load", "dest": "/api/load_data.py" },
-    { "src": "/(.*)", "dest": "/frontend/dist/index.html" }
+    { "src": "/(.*)", "dest": "/frontend/dist/$1" }
   ]
 }
