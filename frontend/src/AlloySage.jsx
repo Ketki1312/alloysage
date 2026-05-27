@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 
 // ─── MOCK API (replaces real fetch when backend not available) ────────────────
 const MOCK_MODE = false; // set to false when running real Flask backend
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = "https://alloysage-backend-api.onrender.com/api";
 
 const mockPredict = (composition, setName, properties) => {
   const clusters = ["Cluster_0", "Cluster_1", "Cluster_2", "Cluster_3", "Cluster_4"];
