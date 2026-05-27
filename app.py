@@ -1,24 +1,126 @@
-from flask import Flask
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-from api.health import app as health_app
-from api.model_info import app as model_info_app
-from api.predict import app as predict_app
-from api.predict_all_sets import app as predict_all_sets_app
-from api.load_data import app as load_data_app
+from api._helpers import models, load_error, predict_for_set
 
 app = Flask(__name__)
 CORS(app)
 
-@app.route("/")
+
+# ───────────────── HEALTH ─────────────────
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    ok = bool(models) and not load_error
+
+    return jsonify({
+        'status': 'ok' if ok else 'degraded',
+        'models_loaded': list(models.keys()),
+        'error': load_error if not ok else None,
+    })
+
+
+# ───────────────── MODEL INFO ─────────────────
+
+@app.route('/api/model-info', methods=['GET'])
+def model_info():
+    info = {}
+
+    for name, m in models.items():
+        info[name] = {
+            'algorithm': m['algorithm'],
+            'accuracy': m['accuracy'],
+            'features': m['features'],
+        }
+
+    return jsonify(info)
+
+
+# ───────────────── PREDICT ─────────────────
+
+@app.route('/api/predict', methods=['POST'])
+def predict():
+
+    if not models:
+        return jsonify({
+            'error': 'Models not loaded'
+        }), 503
+
+    body = request.get_json(force=True) or {}
+
+    composition = body.get('composition', {})
+    set_name = body.get('set', '')
+    properties = body.get('properties', {})
+
+    if not set_name:
+        return jsonify({
+            'error': 'Missing set field'
+        }), 400
+
+    try:
+        result = predict_for_set(
+            set_name,
+            composition,
+            properties
+        )
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e)
+        }), 500
+
+
+# ───────────────── PREDICT ALL SETS ─────────────────
+
+@app.route('/api/predict-all-sets', methods=['POST'])
+def predict_all_sets():
+
+    body = request.get_json(force=True) or {}
+
+    composition = body.get('composition', {})
+    properties = body.get('properties', {})
+
+    results = {}
+
+    for set_name in models.keys():
+
+        try:
+            results[set_name] = predict_for_set(
+                set_name,
+                composition,
+                properties
+            )
+
+        except Exception as e:
+            results[set_name] = {
+                'error': str(e)
+            }
+
+    return jsonify(results)
+
+
+# ───────────────── LOAD ─────────────────
+
+@app.route('/api/load', methods=['POST'])
+def load():
+
+    return jsonify({
+        'message': 'Models already loaded from models.pkl'
+    })
+
+
+# ───────────────── HOME ─────────────────
+
+@app.route('/')
 def home():
-    return {"message": "AlloySage Backend Running"}
+    return {
+        "message": "AlloySage API Running"
+    }
 
-app.register_blueprint(health_app.blueprints[0] if health_app.blueprints else health_app)
-app.register_blueprint(model_info_app.blueprints[0] if model_info_app.blueprints else model_info_app)
-app.register_blueprint(predict_app.blueprints[0] if predict_app.blueprints else predict_app)
-app.register_blueprint(predict_all_sets_app.blueprints[0] if predict_all_sets_app.blueprints else predict_all_sets_app)
-app.register_blueprint(load_data_app.blueprints[0] if load_data_app.blueprints else load_data_app)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+# ───────────────── MAIN ─────────────────
+
+if __name__ == '__main__':
+    app.run(debug=True)
