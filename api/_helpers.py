@@ -36,10 +36,12 @@ def _load():
     try:
         with open(PKL_PATH, 'rb') as f:
             saved = pickle.load(f)
+
         models       = saved['models']
         base_df      = saved['base_df']
         kmeans_model = saved.get('kmeans_model')
         scaler_model = saved.get('scaler_model')
+
     except Exception as e:
         load_error = str(e)
 
@@ -47,25 +49,36 @@ _load()
 
 # ── Utility ───────────────────────────────────────────────────────────────────
 def parse_val(val):
+
     if pd.isna(val) or val == '':
         return 0.0
+
     s = str(val).strip()
+
     nums = [float(x) for x in re.findall(r"[-+]?\d*\.\d+|\d+", s)]
+
     if len(nums) == 2:
         return sum(nums) / 2
+
     if len(nums) == 1:
         return nums[0]
+
     return 0.0
 
 
 def simplify_temper(t):
+
     t = str(t).replace('-', '').upper().strip()
+
     if t.startswith('T'):
         return t[:2]
+
     if t.startswith('H'):
         return t[:2]
+
     if t.startswith(('O', 'F', 'W')):
         return t[:1]
+
     return t
 
 
@@ -75,41 +88,90 @@ def predict_for_set(set_name, composition, properties):
     algorithm, accuracy, and probabilities.
     Raises ValueError on bad input.
     """
+
     if set_name not in models:
-        raise ValueError(f"Unknown set '{set_name}'. Valid: {list(models.keys())}")
+        raise ValueError(
+            f"Unknown set '{set_name}'. Valid: {list(models.keys())}"
+        )
 
     m = models[set_name]
+
     prop_cols = m['features']
 
-    row = {el: float(composition.get(el, 0.0)) for el in ELEMENTS}
+    # ── Build input row ───────────────────────────────────────────────────────
+    row = {
+        el: float(composition.get(el, 0.0))
+        for el in ELEMENTS
+    }
+
     for col in prop_cols:
+
         if col not in properties:
             raise ValueError(f"Missing property '{col}'")
+
         row[col] = float(properties[col])
 
     input_df = pd.DataFrame([row])[ELEMENTS + prop_cols]
 
+    # ── Predict cluster ───────────────────────────────────────────────────────
     encoded = m['model'].predict(input_df)
+
     cluster = m['encoder'].inverse_transform(encoded)[0]
 
+    # ── Dominant cluster temper ───────────────────────────────────────────────
     most_common = 'Unknown'
+
     temper_dist = {}
+
     if base_df is not None:
-        cluster_tempers = base_df[base_df['Cluster_ID'] == cluster]['Base_Temper']
+
+        cluster_tempers = base_df[
+            base_df['Cluster_ID'] == cluster
+        ]['Base_Temper']
+
         if not cluster_tempers.empty:
             most_common = cluster_tempers.mode()[0]
+
         temper_dist = cluster_tempers.value_counts().to_dict()
 
+    # ── Prediction probabilities ─────────────────────────────────────────────
     proba = None
+
     if hasattr(m['model'], 'predict_proba'):
+
         try:
+
             proba_arr = m['model'].predict_proba(input_df)[0]
-            labels = m['encoder'].inverse_transform(range(len(proba_arr)))
+
+            labels = m['encoder'].inverse_transform(
+                range(len(proba_arr))
+            )
+
             cluster_temper_map = {}
+
             if base_df is not None:
+
                 for c_id in labels:
-                    ct = base_df[base_df['Cluster_ID'] == c_id]['Base_Temper']
-                    cluster_temper_map[c_id] = ct.mode()[0] if not ct.empty else 'Unknown'
+
+                    ct = base_df[
+                        base_df['Cluster_ID'] == c_id
+                    ]['Base_Temper']
+
+                    if not ct.empty:
+
+                        # Get top 2 most common tempers
+                        top_tempers = (
+                            ct.value_counts()
+                            .head(2)
+                            .index
+                            .tolist()
+                        )
+
+                        cluster_temper_map[c_id] = "/".join(top_tempers)
+
+                    else:
+                        cluster_temper_map[c_id] = "Unknown"
+
             proba = [
                 {
                     'cluster': labels[i],
@@ -118,10 +180,16 @@ def predict_for_set(set_name, composition, properties):
                 }
                 for i, p in enumerate(proba_arr)
             ]
-            proba.sort(key=lambda x: x['probability'], reverse=True)
-        except Exception:
-            pass
 
+            proba.sort(
+                key=lambda x: x['probability'],
+                reverse=True
+            )
+
+        except Exception as e:
+            print("Probability generation error:", e)
+
+    # ── Final response ────────────────────────────────────────────────────────
     return {
         'cluster': cluster,
         'recommended_temper': most_common,
